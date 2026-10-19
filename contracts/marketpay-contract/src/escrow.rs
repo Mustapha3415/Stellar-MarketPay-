@@ -69,6 +69,42 @@ pub(crate) fn create_escrow_with_milestones(
     )
 }
 
+/// Add funds to an active escrow. Only the client may top up an escrow and
+/// resolved or disputed escrows cannot receive additional funds.
+pub(crate) fn update_escrow_amount(env: Env, job_id: String, client: Address, amount_to_add: i128) {
+    client.require_auth();
+    check_not_frozen(&env, &job_id);
+    check_escrow_not_frozen(&env, &job_id);
+    if amount_to_add <= 0 {
+        panic!("Amount must be positive");
+    }
+
+    let mut escrow: Escrow = env
+        .storage()
+        .instance()
+        .get(&DataKey::Escrow(job_id.clone()))
+        .expect("Escrow not found");
+    if escrow.client != client {
+        panic!("Only the client can update escrow amount");
+    }
+    if escrow.status != EscrowStatus::Locked && escrow.status != EscrowStatus::InProgress {
+        panic!("Cannot update escrow in current status");
+    }
+
+    let new_amount = escrow.amount.checked_add(amount_to_add).expect("Arithmetic overflow");
+    token::Client::new(&env, &escrow.token).transfer(
+        &client,
+        &env.current_contract_address(),
+        &amount_to_add,
+    );
+    escrow.amount = new_amount;
+    env.storage().instance().set(&DataKey::Escrow(job_id.clone()), &escrow);
+    env.events().publish(
+        (symbol_short!("escrow_up"), job_id),
+        (client, amount_to_add, new_amount),
+    );
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn create_escrow_internal(
     env: Env,

@@ -125,6 +125,11 @@ impl MarketPayContract {
         escrow::create_escrow_with_milestones(env, job_id, client, params)
     }
 
+    /// Client adds funds to an active escrow without recreating the job.
+    pub fn update_escrow_amount(env: Env, job_id: String, client: Address, amount_to_add: i128) {
+        escrow::update_escrow_amount(env, job_id, client, amount_to_add)
+    }
+
     /// Freelancer signals that they have started work.
     pub fn start_work(env: Env, job_id: String, freelancer: Address) {
         escrow::start_work(env, job_id, freelancer)

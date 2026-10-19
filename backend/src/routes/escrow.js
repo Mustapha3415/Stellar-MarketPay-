@@ -108,6 +108,36 @@ router.post("/create", escrowActionRateLimiter, async (req, res, next) => {
 });
 
 /**
+ * POST /api/escrow/:jobId/top-up
+ *
+ * Returns the contract call parameters for a client top-up. The wallet signs
+ * and submits the Soroban transaction; the indexer updates the escrow amount
+ * after confirmation.
+ */
+router.post("/:jobId/top-up", escrowActionRateLimiter, verifyJWT, async (req, res, next) => {
+  try {
+    const { jobId } = req.params;
+    const amount = req.body?.amount;
+    const callerAddress = req.user?.publicKey;
+    if (!callerAddress) throw Object.assign(new Error("Unauthorized"), { status: 401 });
+    if (!Number.isInteger(amount) || amount <= 0) {
+      throw Object.assign(new Error("Amount must be a positive integer"), { status: 400 });
+    }
+    const job = await getJob(jobId);
+    if (!job) throw Object.assign(new Error("Job not found"), { status: 404 });
+    if (job.clientAddress && job.clientAddress !== callerAddress) {
+      throw Object.assign(new Error("Only the job client can top up escrow"), { status: 403 });
+    }
+    res.json({
+      success: true,
+      data: { contractMethod: "update_escrow_amount", jobId, client: callerAddress, amount },
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
  * POST /api/escrow/:jobId/release
  *
  * Issue #1401: escrow may only be released by the client who funded it. The
